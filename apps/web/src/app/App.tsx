@@ -1,11 +1,14 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useNavigate } from "react-router";
 import { api } from "@/lib/api";
-import { EvernoteImportGuidePane } from "@/components/EvernoteImportGuidePane";
-import { LoginScreen } from "@/components/LoginScreen";
-import { WorkspaceApp } from "@/components/WorkspaceApp";
 import type { AuthSession } from "@edgeever/shared";
+
+const EvernoteImportGuidePane = lazy(() =>
+  import("@/components/EvernoteImportGuidePane").then((module) => ({ default: module.EvernoteImportGuidePane }))
+);
+const LoginScreen = lazy(() => import("@/components/LoginScreen").then((module) => ({ default: module.LoginScreen })));
+const WorkspaceApp = lazy(() => import("@/components/WorkspaceApp").then((module) => ({ default: module.WorkspaceApp })));
 
 const AuthLoadingScreen = () => (
   <div className="flex h-[100dvh] items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">
@@ -17,16 +20,18 @@ const EvernoteMigrationRoute = () => {
   const navigate = useNavigate();
 
   return (
-    <EvernoteImportGuidePane
-      onClose={() => {
-        if (window.opener) {
-          window.close();
-          return;
-        }
+    <Suspense fallback={<AuthLoadingScreen />}>
+      <EvernoteImportGuidePane
+        onClose={() => {
+          if (window.opener) {
+            window.close();
+            return;
+          }
 
-        navigate("/");
-      }}
-    />
+          navigate("/");
+        }}
+      />
+    </Suspense>
   );
 };
 
@@ -82,21 +87,25 @@ const AuthenticatedWorkspace = () => {
 
   if (!session?.authenticated) {
     return (
-      <LoginScreen
-        error={loginMutation.error instanceof Error ? loginMutation.error.message : null}
-        isSubmitting={loginMutation.isPending}
-        onSubmit={(payload) => loginMutation.mutate(payload)}
-      />
+      <Suspense fallback={<AuthLoadingScreen />}>
+        <LoginScreen
+          error={loginMutation.error instanceof Error ? loginMutation.error.message : null}
+          isSubmitting={loginMutation.isPending}
+          onSubmit={(payload) => loginMutation.mutate(payload)}
+        />
+      </Suspense>
     );
   }
 
   return (
-    <WorkspaceApp
-      authRequired={session.authRequired}
-      isLoggingOut={logoutMutation.isPending}
-      user={session.user}
-      onLogout={() => logoutMutation.mutate()}
-    />
+    <Suspense fallback={<AuthLoadingScreen />}>
+      <WorkspaceApp
+        authRequired={session.authRequired}
+        isLoggingOut={logoutMutation.isPending}
+        user={session.user}
+        onLogout={() => logoutMutation.mutate()}
+      />
+    </Suspense>
   );
 };
 

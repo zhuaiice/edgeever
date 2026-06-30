@@ -83,9 +83,44 @@ export default defineConfig({
               priority: 40,
             },
             {
-              name: "vendor-editor",
-              test: /node_modules[\\/](@tiptap|@floating-ui|prosemirror|orderedmap|rope-sequence|linkifyjs|tippy\.js)[\\/]/,
+              name: "vendor-prosemirror",
+              test: /node_modules[\\/](prosemirror-|orderedmap|rope-sequence)[\\/]/,
+              priority: 38,
+            },
+            {
+              name: "vendor-tiptap-pm",
+              test: /node_modules[\\/]@tiptap[\\/]pm[\\/]/,
+              priority: 36,
+            },
+            {
+              name: "vendor-tiptap-core",
+              test: /node_modules[\\/]@tiptap[\\/]core[\\/]/,
+              priority: 34,
+            },
+            {
+              name: "vendor-tiptap-react",
+              test: /node_modules[\\/]@tiptap[\\/]react[\\/]/,
+              priority: 32,
+            },
+            {
+              name: "vendor-tiptap-extensions",
+              test: /node_modules[\\/]@tiptap[\\/](extension-|extensions)[\\/]/,
               priority: 30,
+            },
+            {
+              name: "vendor-tiptap-starter",
+              test: /node_modules[\\/]@tiptap[\\/]starter-kit[\\/]/,
+              priority: 29,
+            },
+            {
+              name: "vendor-linkify",
+              test: /node_modules[\\/]linkifyjs[\\/]/,
+              priority: 29,
+            },
+            {
+              name: "vendor-floating",
+              test: /node_modules[\\/](@floating-ui|tippy\.js)[\\/]/,
+              priority: 28,
             },
             {
               name: "vendor-query",
@@ -98,9 +133,24 @@ export default defineConfig({
               priority: 20,
             },
             {
-              name: "vendor-ui",
-              test: /node_modules[\\/](@radix-ui|lucide-react|cmdk|vaul|class-variance-authority|clsx|tailwind-merge)[\\/]/,
+              name: "vendor-icons",
+              test: /node_modules[\\/]lucide-react[\\/]/,
+              priority: 18,
+            },
+            {
+              name: "vendor-radix",
+              test: /node_modules[\\/](@radix-ui|cmdk|vaul)[\\/]/,
               priority: 15,
+            },
+            {
+              name: "vendor-ui-utils",
+              test: /node_modules[\\/](class-variance-authority|clsx|tailwind-merge)[\\/]/,
+              priority: 12,
+            },
+            {
+              name: "ui-primitives",
+              test: /src[\\/]components[\\/]ui[\\/]/,
+              priority: 10,
             },
             {
               name: "vendor",
