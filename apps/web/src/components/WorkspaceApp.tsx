@@ -142,6 +142,30 @@ const cacheMemoDetail = (queryClient: QueryClient, memo: MemoDetail, view: MemoV
   queryClient.setQueryData(memoDetailQueryKey(memo.id, view), { memo });
 };
 
+const getAdjacentMemoIdAfterRemoval = (memos: MemoSummary[], removedMemoIds: Set<string>, anchorMemoId: string) => {
+  const anchorIndex = memos.findIndex((memo) => memo.id === anchorMemoId);
+
+  if (anchorIndex < 0) {
+    return null;
+  }
+
+  for (let index = anchorIndex + 1; index < memos.length; index++) {
+    const memoId = memos[index]?.id;
+    if (memoId && !removedMemoIds.has(memoId)) {
+      return memoId;
+    }
+  }
+
+  for (let index = anchorIndex - 1; index >= 0; index--) {
+    const memoId = memos[index]?.id;
+    if (memoId && !removedMemoIds.has(memoId)) {
+      return memoId;
+    }
+  }
+
+  return null;
+};
+
 const MobileBottomNavButton = ({
   active = false,
   icon,
@@ -1088,7 +1112,7 @@ export const WorkspaceApp = ({
       clearMemoSelection();
 
       if (selectedMemoId && deletedMemoIds.has(selectedMemoId)) {
-        setSelectedMemoId(null);
+        setSelectedMemoId(getAdjacentMemoIdAfterRemoval(memos, deletedMemoIds, selectedMemoId));
         setActivePane("memos");
       }
 
@@ -1106,7 +1130,7 @@ export const WorkspaceApp = ({
       api.deleteMemo(memoId, { permanent }),
     onSuccess: async (_data, variables) => {
       if (selectedMemoId === variables.memoId) {
-        setSelectedMemoId(null);
+        setSelectedMemoId(getAdjacentMemoIdAfterRemoval(memos, new Set([variables.memoId]), variables.memoId));
         setActivePane("memos");
       }
       await Promise.all([
