@@ -58,6 +58,7 @@
     "@tiptap/extension-placeholder": "latest",
     "@tiptap/react": "latest",
     "@tiptap/starter-kit": "latest",
+    "@uiw/react-md-editor": "^4.1.1",
     "class-variance-authority": "latest",
     "clsx": "latest",
     "cmdk": "^1.1.1",

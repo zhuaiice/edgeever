@@ -89,6 +89,10 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     rolldownOptions: {
+      input: {
+        app: fileURLToPath(new URL("./index.html", import.meta.url)),
+        "mobile-edit": fileURLToPath(new URL("./mobile-edit.html", import.meta.url)),
+      },
       output: {
         codeSplitting: {
           groups: [
