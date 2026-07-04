@@ -1,32 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import MDEditor, { commands } from "@uiw/react-md-editor/nohighlight";
-import type { PreviewType } from "@uiw/react-md-editor";
-import "@uiw/react-md-editor/markdown-editor.css";
-import { docToMarkdown, type MemoDetail, type Resource, type TiptapDoc } from "@edgeever/shared";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Image from "@tiptap/extension-image";
+import Placeholder from "@tiptap/extension-placeholder";
+import { docToMarkdown, emptyDoc, markdownToDoc, type MemoDetail, type TiptapDoc } from "@edgeever/shared";
 import "./styles/mobile-markdown-editor.css";
 
 const AUTO_SAVE_DELAY_MS = 1200;
 const LEAVE_SAVE_TIMEOUT_MS = 1600;
-const DRAFT_STORAGE_PREFIX = "edgeever-mobile-edit-draft:";
+const DRAFT_STORAGE_PREFIX = "edgeever-mobile-tiptap-draft:";
 const DEFAULT_MEMO_TITLE = "无标题笔记";
 
 type MemoResponse = {
   memo: MemoDetail;
 };
 
-type ResourceResponse = {
-  resource: Resource;
-};
-
 type MobileDraft = {
   title: string;
   tagsText: string;
-  body: string;
+  contentJson: TiptapDoc;
   updatedAt: string;
 };
 
-type SaveState = "loading" | "idle" | "dirty" | "saving" | "saved" | "uploading" | "error" | "local-draft" | "leaving";
+type SaveState = "loading" | "idle" | "dirty" | "saving" | "saved" | "error" | "local-draft" | "leaving";
 
 const getParams = () => new URLSearchParams(window.location.hash ? window.location.hash.slice(1) : window.location.search);
 
@@ -36,14 +33,12 @@ const parseTags = (value: string) =>
     .map((tag) => tag.trim())
     .filter(Boolean);
 
-const escapeMarkdownLabel = (value: string) => value.replace(/\]/g, "\\]");
-
 const safeReturnPath = (value: string | null) => (value?.startsWith("/") ? value : "/");
 
 const requestJson = async <T,>(path: string, init?: RequestInit): Promise<T> => {
   const headers = new Headers(init?.headers);
 
-  if (!(init?.body instanceof FormData) && !headers.has("Content-Type")) {
+  if (!headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -65,42 +60,19 @@ const requestJson = async <T,>(path: string, init?: RequestInit): Promise<T> => 
   return response.json() as Promise<T>;
 };
 
-const uploadResource = async (memoId: string, file: File) => {
-  const form = new FormData();
-  form.append("file", file);
-
-  return requestJson<ResourceResponse>(`/api/v1/memos/${encodeURIComponent(memoId)}/resources`, {
-    method: "POST",
-    body: form,
-  });
-};
-
-const markdownForResource = (resource: Resource) => {
-  const filename = resource.filename || "附件";
-
-  if (resource.kind === "image") {
-    return `![${escapeMarkdownLabel(filename)}](${resource.url})`;
+const normalizeDoc = (memo: MemoDetail): TiptapDoc => {
+  if (memo.contentJson && typeof memo.contentJson === "object") {
+    return memo.contentJson as TiptapDoc;
   }
 
-  return `附件：${filename}\n${resource.url}`;
+  if (memo.contentMarkdown) {
+    return markdownToDoc(memo.contentMarkdown);
+  }
+
+  return emptyDoc();
 };
 
-const insertAtCursor = (value: string, insertion: string) => {
-  const textarea = document.querySelector<HTMLTextAreaElement>(".edgeever-mobile-md-editor textarea");
-  const start = textarea?.selectionStart ?? value.length;
-  const end = textarea?.selectionEnd ?? start;
-  const nextValue = `${value.slice(0, start)}${insertion}${value.slice(end)}`;
-  const nextCursor = start + insertion.length;
-
-  window.setTimeout(() => {
-    textarea?.focus();
-    textarea?.setSelectionRange(nextCursor, nextCursor);
-  }, 0);
-
-  return nextValue;
-};
-
-const MobileMarkdownEditorApp = () => {
+const MobileTiptapEditorApp = () => {
   const params = useMemo(() => getParams(), []);
   const memoId = params.get("memoId");
   const returnTo = safeReturnPath(params.get("returnTo"));
@@ -111,10 +83,9 @@ const MobileMarkdownEditorApp = () => {
   const titleRef = useRef("");
   const [tagsText, setTagsText] = useState("");
   const tagsTextRef = useRef("");
-  const [markdown, setMarkdown] = useState("");
-  const markdownRef = useRef("");
-  const [preview, setPreview] = useState<PreviewType>("edit");
+  const contentJsonRef = useRef<TiptapDoc>(emptyDoc());
   const [saveState, setSaveState] = useState<SaveState>("loading");
+  const saveStateRef = useRef<SaveState>("loading");
   const [error, setError] = useState<string | null>(null);
   const dirtyRef = useRef(false);
   const leavingRef = useRef(false);
@@ -122,31 +93,22 @@ const MobileMarkdownEditorApp = () => {
   const saveTimerRef = useRef<number | null>(null);
   const currentSavePromiseRef = useRef<Promise<boolean> | null>(null);
   const lastSavedSnapshotRef = useRef("");
-  const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    memoRef.current = memo;
-  }, [memo]);
+  const setSaveStateStable = useCallback((nextState: SaveState) => {
+    if (saveStateRef.current === nextState) {
+      return;
+    }
 
-  useEffect(() => {
-    titleRef.current = title;
-  }, [title]);
-
-  useEffect(() => {
-    tagsTextRef.current = tagsText;
-  }, [tagsText]);
-
-  useEffect(() => {
-    markdownRef.current = markdown;
-  }, [markdown]);
+    saveStateRef.current = nextState;
+    setSaveState(nextState);
+  }, []);
 
   const currentSnapshot = useCallback(
     () =>
       JSON.stringify({
         title: titleRef.current,
         tagsText: tagsTextRef.current,
-        body: markdownRef.current,
+        contentJson: contentJsonRef.current,
       }),
     []
   );
@@ -159,7 +121,7 @@ const MobileMarkdownEditorApp = () => {
     const draft: MobileDraft = {
       title: titleRef.current,
       tagsText: tagsTextRef.current,
-      body: markdownRef.current,
+      contentJson: contentJsonRef.current,
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(draftKey, JSON.stringify(draft));
@@ -177,6 +139,61 @@ const MobileMarkdownEditorApp = () => {
       return null;
     }
   }, [draftKey]);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Image.configure({
+        allowBase64: false,
+        inline: false,
+      }),
+      Placeholder.configure({
+        placeholder: "开始记录...",
+      }),
+    ],
+    content: emptyDoc(),
+    editorProps: {
+      attributes: {
+        class: "edgeever-mobile-tiptap-content",
+        autocapitalize: "sentences",
+        autocomplete: "on",
+        autocorrect: "on",
+        inputmode: "text",
+        spellcheck: "true",
+      },
+    },
+    onUpdate: ({ editor: activeEditor }) => {
+      contentJsonRef.current = activeEditor.getJSON() as TiptapDoc;
+      dirtyRef.current = true;
+      persistLocalDraft();
+
+      if (saveStateRef.current !== "dirty") {
+        setSaveStateStable("dirty");
+      }
+
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+      saveTimerRef.current = window.setTimeout(() => {
+        saveTimerRef.current = null;
+        void saveNowRef.current();
+      }, AUTO_SAVE_DELAY_MS);
+    },
+  });
+
+  const saveNowRef = useRef<({ keepalive }?: { keepalive?: boolean }) => Promise<boolean>>(async () => false);
+
+  useEffect(() => {
+    memoRef.current = memo;
+  }, [memo]);
+
+  useEffect(() => {
+    titleRef.current = title;
+  }, [title]);
+
+  useEffect(() => {
+    tagsTextRef.current = tagsText;
+  }, [tagsText]);
 
   const saveNow = useCallback(
     async ({ keepalive = false }: { keepalive?: boolean } = {}) => {
@@ -200,17 +217,18 @@ const MobileMarkdownEditorApp = () => {
       }
 
       savingRef.current = true;
-      setSaveState("saving");
+      setSaveStateStable("saving");
       setError(null);
 
       currentSavePromiseRef.current = (async () => {
+        const nextContentJson = contentJsonRef.current;
         const data = await requestJson<MemoResponse>(`/api/v1/memos/${encodeURIComponent(currentMemo.id)}`, {
           method: "PATCH",
           keepalive,
           body: JSON.stringify({
             expectedRevision: currentMemo.revision,
             title: titleRef.current,
-            contentMarkdown: markdownRef.current,
+            contentJson: nextContentJson,
             tags: parseTags(tagsTextRef.current),
           }),
         });
@@ -221,10 +239,10 @@ const MobileMarkdownEditorApp = () => {
         if (draftKey) {
           localStorage.removeItem(draftKey);
         }
-        setSaveState("saved");
+        setSaveStateStable("saved");
         window.setTimeout(() => {
           if (!dirtyRef.current && !savingRef.current && !leavingRef.current) {
-            setSaveState("idle");
+            setSaveStateStable("idle");
           }
         }, 1200);
         return true;
@@ -235,20 +253,24 @@ const MobileMarkdownEditorApp = () => {
       } catch (saveError) {
         persistLocalDraft();
         setError(saveError instanceof Error ? saveError.message : "保存失败，已保留本地草稿");
-        setSaveState("error");
+        setSaveStateStable("error");
         return false;
       } finally {
         savingRef.current = false;
         currentSavePromiseRef.current = null;
       }
     },
-    [currentSnapshot, draftKey, persistLocalDraft]
+    [currentSnapshot, draftKey, persistLocalDraft, setSaveStateStable]
   );
 
-  const scheduleSave = useCallback(() => {
+  useEffect(() => {
+    saveNowRef.current = saveNow;
+  }, [saveNow]);
+
+  const scheduleMetadataSave = useCallback(() => {
     dirtyRef.current = true;
     persistLocalDraft();
-    setSaveState("dirty");
+    setSaveStateStable("dirty");
 
     if (saveTimerRef.current !== null) {
       window.clearTimeout(saveTimerRef.current);
@@ -257,7 +279,7 @@ const MobileMarkdownEditorApp = () => {
       saveTimerRef.current = null;
       void saveNow();
     }, AUTO_SAVE_DELAY_MS);
-  }, [persistLocalDraft, saveNow]);
+  }, [persistLocalDraft, saveNow, setSaveStateStable]);
 
   const navigateBack = useCallback(() => {
     window.location.replace(returnTo);
@@ -274,62 +296,33 @@ const MobileMarkdownEditorApp = () => {
       window.clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
-    setSaveState("leaving");
+    setSaveStateStable("leaving");
 
     await Promise.race([
       saveNow({ keepalive: true }),
       new Promise((resolve) => window.setTimeout(resolve, LEAVE_SAVE_TIMEOUT_MS)),
     ]);
     navigateBack();
-  }, [navigateBack, persistLocalDraft, saveNow]);
+  }, [navigateBack, persistLocalDraft, saveNow, setSaveStateStable]);
 
   const handleTitleChange = (nextTitle: string) => {
     setTitle(nextTitle);
     titleRef.current = nextTitle;
-    scheduleSave();
+    scheduleMetadataSave();
   };
 
   const handleTagsChange = (nextTagsText: string) => {
     setTagsText(nextTagsText);
     tagsTextRef.current = nextTagsText;
-    scheduleSave();
-  };
-
-  const handleMarkdownChange = (nextMarkdown?: string) => {
-    const value = nextMarkdown ?? "";
-    setMarkdown(value);
-    markdownRef.current = value;
-    scheduleSave();
-  };
-
-  const handleUpload = async (file?: File | null) => {
-    const currentMemo = memoRef.current;
-    if (!currentMemo || !file) {
-      return;
-    }
-
-    setSaveState("uploading");
-    setError(null);
-
-    try {
-      const data = await uploadResource(currentMemo.id, file);
-      const insertion = `\n\n${markdownForResource(data.resource)}\n\n`;
-      const nextMarkdown = insertAtCursor(markdownRef.current, insertion);
-      setMarkdown(nextMarkdown);
-      markdownRef.current = nextMarkdown;
-      dirtyRef.current = true;
-      persistLocalDraft();
-      void saveNow();
-    } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "上传失败");
-      setSaveState("error");
-    }
+    scheduleMetadataSave();
   };
 
   useEffect(() => {
-    if (!memoId) {
-      setError("缺少 memoId");
-      setSaveState("error");
+    if (!memoId || !editor) {
+      if (!memoId) {
+        setError("缺少 memoId");
+        setSaveStateStable("error");
+      }
       return;
     }
 
@@ -344,7 +337,7 @@ const MobileMarkdownEditorApp = () => {
 
         const nextTitle = data.memo.title || "";
         const nextTagsText = Array.isArray(data.memo.tags) ? data.memo.tags.join(", ") : "";
-        const nextMarkdown = data.memo.contentMarkdown || docToMarkdown(data.memo.contentJson as TiptapDoc);
+        const nextContentJson = normalizeDoc(data.memo);
         const draft = readLocalDraft();
         const useDraft = Boolean(draft && Date.parse(draft.updatedAt || "") >= Date.parse(data.memo.updatedAt || ""));
 
@@ -355,45 +348,39 @@ const MobileMarkdownEditorApp = () => {
           titleRef.current = draft.title || "";
           setTagsText(draft.tagsText || "");
           tagsTextRef.current = draft.tagsText || "";
-          setMarkdown(draft.body || "");
-          markdownRef.current = draft.body || "";
+          contentJsonRef.current = draft.contentJson || emptyDoc();
+          editor.commands.setContent(contentJsonRef.current, { emitUpdate: false });
           dirtyRef.current = true;
-          setSaveState("local-draft");
-          scheduleSave();
+          setSaveStateStable("local-draft");
+          scheduleMetadataSave();
         } else {
           setTitle(nextTitle);
           titleRef.current = nextTitle;
           setTagsText(nextTagsText);
           tagsTextRef.current = nextTagsText;
-          setMarkdown(nextMarkdown);
-          markdownRef.current = nextMarkdown;
+          contentJsonRef.current = nextContentJson;
+          editor.commands.setContent(nextContentJson, { emitUpdate: false });
           lastSavedSnapshotRef.current = JSON.stringify({
             title: nextTitle,
             tagsText: nextTagsText,
-            body: nextMarkdown,
+            contentJson: nextContentJson,
           });
           dirtyRef.current = false;
-          setSaveState("idle");
-        }
-
-        for (const delay of [0, 120, 500]) {
-          window.setTimeout(() => {
-            document.querySelector<HTMLTextAreaElement>(".edgeever-mobile-md-editor textarea")?.focus();
-          }, delay);
+          setSaveStateStable("idle");
         }
       } catch (loadError) {
         if (cancelled) {
           return;
         }
         setError(loadError instanceof Error ? loadError.message : "加载失败");
-        setSaveState("error");
+        setSaveStateStable("error");
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [memoId, readLocalDraft, scheduleSave]);
+  }, [editor, memoId, readLocalDraft, scheduleMetadataSave, setSaveStateStable]);
 
   useEffect(() => {
     window.history.replaceState({ edgeeverMobileEditor: true }, "");
@@ -434,22 +421,22 @@ const MobileMarkdownEditorApp = () => {
       ? "加载中"
       : saveState === "saving"
         ? "保存中"
-        : saveState === "uploading"
-          ? "上传中"
-          : saveState === "dirty"
-            ? "未保存"
-            : saveState === "saved"
-              ? "已保存"
-              : saveState === "local-draft"
-                ? "本地草稿"
-                : saveState === "leaving"
-                  ? "返回中"
-                  : saveState === "error"
-                    ? "保存失败"
-                    : "已保存";
+        : saveState === "dirty"
+          ? "未保存"
+          : saveState === "saved"
+            ? "已保存"
+            : saveState === "local-draft"
+              ? "本地草稿"
+              : saveState === "leaving"
+                ? "返回中"
+                : saveState === "error"
+                  ? "保存失败"
+                  : "已保存";
 
   const statusClassName =
-    saveState === "error" ? "error" : saveState === "dirty" || saveState === "saving" || saveState === "uploading" || saveState === "leaving" ? "active" : "";
+    saveState === "error" ? "error" : saveState === "dirty" || saveState === "saving" || saveState === "leaving" ? "active" : "";
+
+  const fallbackMarkdown = memo ? docToMarkdown(contentJsonRef.current) : "";
 
   return (
     <div className="mobile-editor-shell">
@@ -486,76 +473,16 @@ const MobileMarkdownEditorApp = () => {
           onChange={(event) => handleTagsChange(event.target.value)}
         />
 
-        <div className="mobile-editor-tool-row">
-          <button type="button" onClick={() => imageInputRef.current?.click()} disabled={!memo || saveState === "uploading"}>
-            图片
-          </button>
-          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={!memo || saveState === "uploading"}>
-            附件
-          </button>
-          <div className="mobile-editor-preview-toggle" role="group" aria-label="编辑预览切换">
-            <button type="button" aria-pressed={preview === "edit"} onClick={() => setPreview("edit")}>
-              编辑
-            </button>
-            <button type="button" aria-pressed={preview === "preview"} onClick={() => setPreview("preview")}>
-              预览
-            </button>
-          </div>
+        <div className="edgeever-mobile-tiptap-editor">
+          <EditorContent editor={editor} />
         </div>
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
-          hidden
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            void handleUpload(file);
-          }}
-        />
-        <input
-          ref={fileInputRef}
-          type="file"
-          hidden
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            void handleUpload(file);
-          }}
-        />
 
-        <div className="edgeever-mobile-md-editor" data-color-mode="light">
-          <MDEditor
-            value={markdown}
-            preview={preview}
-            height="calc(100dvh - 15.75rem)"
-            minHeight={360}
-            visibleDragbar={false}
-            enableScroll
-            autoFocus
-            autoFocusEnd
-            textareaProps={{
-              autoComplete: "on",
-              autoCorrect: "on",
-              inputMode: "text",
-              enterKeyHint: "enter",
-              spellCheck: true,
-              placeholder: "开始记录...",
-              "aria-label": "笔记正文",
-            }}
-            commands={[
-              commands.bold,
-              commands.italic,
-              commands.heading,
-              commands.quote,
-              commands.unorderedListCommand,
-              commands.orderedListCommand,
-              commands.link,
-            ]}
-            extraCommands={[]}
-            onChange={handleMarkdownChange}
-          />
-        </div>
+        {saveState === "error" && fallbackMarkdown && (
+          <details className="mobile-editor-fallback">
+            <summary>查看当前正文 Markdown 备份</summary>
+            <pre>{fallbackMarkdown}</pre>
+          </details>
+        )}
       </main>
     </div>
   );
@@ -569,6 +496,6 @@ if (!root) {
 
 createRoot(root).render(
   <React.StrictMode>
-    <MobileMarkdownEditorApp />
+    <MobileTiptapEditorApp />
   </React.StrictMode>
 );
