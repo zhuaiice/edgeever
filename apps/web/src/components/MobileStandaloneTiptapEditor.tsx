@@ -75,6 +75,7 @@ export const MobileStandaloneTiptapEditor = ({
   const initialFocusTimerRef = useRef<number | null>(null);
   const currentSavePromiseRef = useRef<Promise<boolean> | null>(null);
   const lastSavedSnapshotRef = useRef("");
+  const backgroundSavePendingRef = useRef(false);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const setSaveStateStable = useCallback((nextState: MobileEditorSaveState) => {
@@ -242,6 +243,119 @@ export const MobileStandaloneTiptapEditor = ({
     tagsTextRef.current = tagsText;
   }, [tagsText]);
 
+  const clearPersistedDrafts = useCallback(async (memoId: string) => {
+    if (draftKey) {
+      localStorage.removeItem(draftKey);
+    }
+
+    await Promise.all([
+      localDb.drafts.delete(memoId),
+      localDb.syncQueue.delete(getMemoUpdateQueueId(memoId)),
+    ]);
+  }, [draftKey]);
+
+  const buildSavePayload = useCallback((currentMemo: MemoDetail) => ({
+    expectedRevision: currentMemo.revision,
+    title: titleRef.current,
+    contentJson: contentJsonRef.current,
+    tags: parseMobileEditorTags(tagsTextRef.current),
+  }), []);
+
+  const applySavedMemo = useCallback(async (savedMemo: MemoDetail, savedSnapshot: string) => {
+    memoRef.current = savedMemo;
+    setMemo(savedMemo);
+    backgroundSavePendingRef.current = false;
+    lastSavedSnapshotRef.current = savedSnapshot;
+
+    if (currentSnapshot() === savedSnapshot) {
+      dirtyRef.current = false;
+      await clearPersistedDrafts(savedMemo.id);
+      setSaveStateStable("saved");
+      window.setTimeout(() => {
+        if (!dirtyRef.current && !savingRef.current && !leavingRef.current) {
+          setSaveStateStable("idle");
+        }
+      }, 1200);
+      return;
+    }
+
+    dirtyRef.current = true;
+    persistLocalDraft();
+    setSaveStateStable("dirty");
+  }, [clearPersistedDrafts, currentSnapshot, persistLocalDraft, setSaveStateStable]);
+
+  const sendBackgroundSave = useCallback(() => {
+    const currentMemo = memoRef.current;
+    if (!currentMemo || currentMemo.isDeleted || !dirtyRef.current) {
+      return false;
+    }
+
+    const path = `/api/v1/memos/${encodeURIComponent(currentMemo.id)}/save`;
+    const body = JSON.stringify(buildSavePayload(currentMemo));
+    const snapshot = currentSnapshot();
+
+    if (typeof navigator.sendBeacon === "function") {
+      const accepted = navigator.sendBeacon(path, new Blob([body], { type: "application/json" }));
+
+      if (accepted) {
+        backgroundSavePendingRef.current = true;
+        void Promise.all([
+          localDb.drafts.delete(currentMemo.id),
+          localDb.syncQueue.delete(getMemoUpdateQueueId(currentMemo.id)),
+        ]);
+        return true;
+      }
+    }
+
+    void requestMobileEditorJson<MobileEditorMemoResponse>(path, {
+      method: "POST",
+      keepalive: true,
+      body,
+    })
+      .then((data) => applySavedMemo(data.memo, snapshot))
+      .catch(() => {
+        persistLocalDraft();
+        setSaveStateStable("local-draft");
+      });
+
+    return true;
+  }, [applySavedMemo, buildSavePayload, currentSnapshot, persistLocalDraft, setSaveStateStable]);
+
+  const reconcileBackgroundSave = useCallback(async () => {
+    const currentMemo = memoRef.current;
+    if (!currentMemo || !backgroundSavePendingRef.current) {
+      return;
+    }
+
+    try {
+      const data = await requestMobileEditorJson<MobileEditorMemoResponse>(`/api/v1/memos/${encodeURIComponent(currentMemo.id)}`);
+      const remoteSnapshot = JSON.stringify({
+        title: data.memo.title || "",
+        tagsText: Array.isArray(data.memo.tags) ? data.memo.tags.join(", ") : "",
+        contentJson: normalizeMobileEditorDoc(data.memo),
+      });
+
+      memoRef.current = data.memo;
+      setMemo(data.memo);
+      backgroundSavePendingRef.current = false;
+
+      if (remoteSnapshot === currentSnapshot()) {
+        lastSavedSnapshotRef.current = remoteSnapshot;
+        dirtyRef.current = false;
+        await clearPersistedDrafts(data.memo.id);
+        setSaveStateStable("saved");
+        return;
+      }
+
+      dirtyRef.current = true;
+      persistLocalDraft();
+      void saveNowRef.current();
+    } catch {
+      persistLocalDraft();
+      setSaveStateStable("local-draft");
+    }
+  }, [clearPersistedDrafts, currentSnapshot, persistLocalDraft, setSaveStateStable]);
+
   const saveNow = useCallback(
     async ({ keepalive = false }: { keepalive?: boolean } = {}) => {
       const currentMemo = memoRef.current;
@@ -268,35 +382,13 @@ export const MobileStandaloneTiptapEditor = ({
       setError(null);
 
       currentSavePromiseRef.current = (async () => {
-        const nextContentJson = contentJsonRef.current;
         const data = await requestMobileEditorJson<MobileEditorMemoResponse>(`/api/v1/memos/${encodeURIComponent(currentMemo.id)}`, {
           method: "PATCH",
           keepalive,
-          body: JSON.stringify({
-            expectedRevision: currentMemo.revision,
-            title: titleRef.current,
-            contentJson: nextContentJson,
-            tags: parseMobileEditorTags(tagsTextRef.current),
-          }),
+          body: JSON.stringify(buildSavePayload(currentMemo)),
         });
 
-        memoRef.current = data.memo;
-        setMemo(data.memo);
-        lastSavedSnapshotRef.current = currentSnapshot();
-        dirtyRef.current = false;
-        if (draftKey) {
-          localStorage.removeItem(draftKey);
-        }
-        await Promise.all([
-          localDb.drafts.delete(data.memo.id),
-          localDb.syncQueue.delete(getMemoUpdateQueueId(data.memo.id)),
-        ]);
-        setSaveStateStable("saved");
-        window.setTimeout(() => {
-          if (!dirtyRef.current && !savingRef.current && !leavingRef.current) {
-            setSaveStateStable("idle");
-          }
-        }, 1200);
+        await applySavedMemo(data.memo, snapshot);
         return true;
       })();
 
@@ -318,7 +410,7 @@ export const MobileStandaloneTiptapEditor = ({
         currentSavePromiseRef.current = null;
       }
     },
-    [currentSnapshot, draftKey, persistLocalDraft, setSaveStateStable]
+    [applySavedMemo, buildSavePayload, currentSnapshot, persistLocalDraft, setSaveStateStable]
   );
 
   useEffect(() => {
@@ -583,17 +675,22 @@ export const MobileStandaloneTiptapEditor = ({
     const handlePageHide = () => {
       if (dirtyRef.current) {
         persistLocalDraft();
-        void saveNow({ keepalive: true });
+        if (!sendBackgroundSave()) {
+          void saveNow({ keepalive: true });
+        }
       }
     };
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden" && dirtyRef.current) {
         persistLocalDraft();
-        void saveNow({ keepalive: true });
+        if (!sendBackgroundSave()) {
+          void saveNow({ keepalive: true });
+        }
         return;
       }
 
       if (document.visibilityState === "visible") {
+        void reconcileBackgroundSave();
         void syncQueuedChanges({
           onSynced: (syncedMemo) => {
             if (syncedMemo.id !== memoRef.current?.id) {
@@ -648,7 +745,7 @@ export const MobileStandaloneTiptapEditor = ({
         window.clearTimeout(initialFocusTimerRef.current);
       }
     };
-  }, [currentSnapshot, draftKey, leavePage, persistLocalDraft, saveNow, setSaveStateStable]);
+  }, [currentSnapshot, draftKey, leavePage, persistLocalDraft, reconcileBackgroundSave, saveNow, sendBackgroundSave, setSaveStateStable]);
 
   const saveLabel = getMobileEditorSaveLabel(saveState);
   const statusClassName = getMobileEditorStatusClassName(saveState);

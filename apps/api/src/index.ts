@@ -21,6 +21,7 @@ import {
   type MemoDetail,
   type MemoRevision,
   type MemoSummary,
+  type MemoUpdateInput,
   type Notebook,
   type NotebookCreateInput,
   type Resource,
@@ -1454,8 +1455,20 @@ app.patch("/api/v1/memos/:id", zValidator("json", MemoUpdateSchema), async (c) =
     return denied;
   }
 
-  const id = c.req.param("id");
-  const input = c.req.valid("json");
+  return updateMemoFromInput(c, c.req.param("id"), c.req.valid("json"));
+});
+
+app.post("/api/v1/memos/:id/save", zValidator("json", MemoUpdateSchema), async (c) => {
+  const denied = requireScopes(c, "write:memos");
+
+  if (denied) {
+    return denied;
+  }
+
+  return updateMemoFromInput(c, c.req.param("id"), c.req.valid("json"));
+});
+
+const updateMemoFromInput = async (c: AppContext, id: string, input: MemoUpdateInput) => {
   const actor = getAuditActor(c);
   const actorLabel = getActorLabel(c);
   const current = await getMemoDetailRow(c.env.DB, id);
@@ -1553,7 +1566,7 @@ app.patch("/api/v1/memos/:id", zValidator("json", MemoUpdateSchema), async (c) =
   ]);
 
   return c.json({ memo: await getMemoDetail(c.env.DB, id) });
-});
+};
 
 app.delete("/api/v1/memos/:id", async (c) => {
   const denied = requireScopes(c, "write:memos");
