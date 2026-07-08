@@ -196,16 +196,18 @@ const MOBILE_MEMO_TEMPLATES_EN: MemoTemplate[] = [
   },
 ];
 
-const formatExecutionEnvironment = (environment: string | null | undefined) => {
+const formatExecutionEnvironment = (environment: string | null | undefined, localePreference: MobileLocaleMode = "system") => {
+  const english = isEnglishMobileLocale(localePreference);
+
   switch (environment) {
     case "standalone":
-      return "独立安装包";
+      return english ? "Standalone app" : "独立安装包";
     case "storeClient":
-      return "Expo Go / 开发客户端";
+      return english ? "Expo Go / development client" : "Expo Go / 开发客户端";
     case "bare":
       return "Bare React Native";
     default:
-      return environment || "未知";
+      return environment || getMobileSystemInfoText(localePreference).unknown;
   }
 };
 const ALL_TOKEN_SCOPES = [
@@ -3109,6 +3111,7 @@ const SystemInfoModal = ({
   const [copied, setCopied] = useState(false);
   const localePreference = useMobileLocalePreference();
   const resolvedLocale = getResolvedMobileLocale(localePreference);
+  const copy = getMobileSystemInfoText(localePreference);
   const expoConfig = Constants.expoConfig;
   const expoExtra = expoConfig?.extra as { eas?: { projectId?: string } } | undefined;
   const nativeIdentifier = Platform.select({
@@ -3117,20 +3120,20 @@ const SystemInfoModal = ({
     default: expoConfig?.slug,
   });
   const infoItems = [
-    { label: "版本", value: `v${MOBILE_APP_VERSION}` },
-    { label: "构建", value: __DEV__ ? "development" : "production" },
-    { label: "平台", value: Platform.OS },
-    { label: "平台版本", value: String(Platform.Version) },
-    { label: "安装形态", value: formatExecutionEnvironment(Constants.executionEnvironment) },
-    { label: "应用标识", value: nativeIdentifier || "未知" },
-    { label: "Expo Owner", value: expoConfig?.owner || "未设置" },
-    { label: "Expo Slug", value: expoConfig?.slug || "未知" },
-    { label: "EAS Project ID", value: Constants.easConfig?.projectId || expoExtra?.eas?.projectId || "未连接" },
-    { label: "实例地址", value: baseUrl || "未连接" },
-    { label: "笔记本数量", value: String(notebookCount) },
-    { label: "笔记总数", value: String(memoCount) },
-    { label: "时区", value: Intl.DateTimeFormat().resolvedOptions().timeZone || "未知" },
-    { label: "语言", value: localePreference === "system" ? `${resolvedLocale}（跟随系统）` : resolvedLocale },
+    { label: copy.version, value: `v${MOBILE_APP_VERSION}` },
+    { label: copy.build, value: __DEV__ ? "development" : "production" },
+    { label: copy.platform, value: Platform.OS },
+    { label: copy.platformVersion, value: String(Platform.Version) },
+    { label: copy.installMode, value: formatExecutionEnvironment(Constants.executionEnvironment, localePreference) },
+    { label: copy.appIdentifier, value: nativeIdentifier || copy.unknown },
+    { label: "Expo Owner", value: expoConfig?.owner || copy.notSet },
+    { label: "Expo Slug", value: expoConfig?.slug || copy.unknown },
+    { label: "EAS Project ID", value: Constants.easConfig?.projectId || expoExtra?.eas?.projectId || copy.disconnected },
+    { label: copy.instanceUrl, value: baseUrl || copy.disconnected },
+    { label: copy.notebookCount, value: String(notebookCount) },
+    { label: copy.memoCount, value: String(memoCount) },
+    { label: copy.timeZone, value: Intl.DateTimeFormat().resolvedOptions().timeZone || copy.unknown },
+    { label: copy.language, value: localePreference === "system" ? `${resolvedLocale} (${copy.followSystem})` : resolvedLocale },
   ];
 
   const copySystemInfo = async () => {
@@ -3146,14 +3149,14 @@ const SystemInfoModal = ({
           <IconButton onPress={onClose}>
             <X color="#0f172a" size={20} />
           </IconButton>
-          <Text style={styles.modalTitle}>系统信息</Text>
+          <Text style={styles.modalTitle}>{copy.title}</Text>
           <IconButton onPress={copySystemInfo}>
             {copied ? <ShieldCheck color="#047857" size={18} /> : <Copy color="#0f172a" size={18} />}
           </IconButton>
         </View>
 
         <ScrollView contentContainerStyle={styles.editorForm}>
-          <Text style={styles.sectionSubtitle}>用于排查客户端、实例连接和多端环境问题。</Text>
+          <Text style={styles.sectionSubtitle}>{copy.description}</Text>
           {infoItems.map((item) => (
             <PanelRow key={item.label} label={item.label} value={item.value} />
           ))}
@@ -5324,11 +5327,54 @@ const isNotebookDescendant = (notebooks: Notebook[], candidateNotebookId: string
 const getResolvedMobileLocale = (localePreference: MobileLocaleMode) =>
   localePreference === "system" ? Intl.DateTimeFormat().resolvedOptions().locale || "zh-CN" : localePreference;
 
+const isEnglishMobileLocale = (localePreference: MobileLocaleMode) => getResolvedMobileLocale(localePreference).startsWith("en");
+
 const getMobileMemoTemplates = (localePreference: MobileLocaleMode) =>
-  getResolvedMobileLocale(localePreference).startsWith("en") ? MOBILE_MEMO_TEMPLATES_EN : MOBILE_MEMO_TEMPLATES_ZH;
+  isEnglishMobileLocale(localePreference) ? MOBILE_MEMO_TEMPLATES_EN : MOBILE_MEMO_TEMPLATES_ZH;
 
 const getMobileAdvancedPrompts = (localePreference: MobileLocaleMode) =>
-  getResolvedMobileLocale(localePreference).startsWith("en") ? ADVANCED_PROMPTS_EN : ADVANCED_PROMPTS_ZH;
+  isEnglishMobileLocale(localePreference) ? ADVANCED_PROMPTS_EN : ADVANCED_PROMPTS_ZH;
+
+const getMobileSystemInfoText = (localePreference: MobileLocaleMode) =>
+  isEnglishMobileLocale(localePreference)
+    ? {
+        appIdentifier: "App identifier",
+        build: "Build",
+        description: "Use this to troubleshoot the app, instance connection, and multi-device environment.",
+        disconnected: "Disconnected",
+        followSystem: "Follow system",
+        installMode: "Mode",
+        instanceUrl: "Instance URL",
+        language: "Language",
+        memoCount: "Notes",
+        notSet: "Not set",
+        notebookCount: "Notebooks",
+        platform: "Platform",
+        platformVersion: "Platform version",
+        timeZone: "Time zone",
+        title: "System info",
+        unknown: "Unknown",
+        version: "Version",
+      }
+    : {
+        appIdentifier: "应用标识",
+        build: "构建",
+        description: "用于排查客户端、实例连接和多端环境问题。",
+        disconnected: "未连接",
+        followSystem: "跟随系统",
+        installMode: "安装形态",
+        instanceUrl: "实例地址",
+        language: "语言",
+        memoCount: "笔记总数",
+        notSet: "未设置",
+        notebookCount: "笔记本数量",
+        platform: "平台",
+        platformVersion: "平台版本",
+        timeZone: "时区",
+        title: "系统信息",
+        unknown: "未知",
+        version: "版本",
+      };
 
 const formatDate = (value: string, localePreference: MobileLocaleMode = "system") =>
   new Intl.DateTimeFormat(getResolvedMobileLocale(localePreference), {
