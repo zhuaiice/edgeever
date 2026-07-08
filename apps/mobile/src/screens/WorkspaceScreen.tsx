@@ -112,6 +112,10 @@ type MemoTemplate = {
   contentMarkdown: string;
   tags: string[];
 };
+type NotebookOption = {
+  notebook: Notebook;
+  depth: number;
+};
 
 export const WorkspaceScreen = () => {
   const { client, session, signOut } = useSession();
@@ -700,11 +704,11 @@ const NotesView = ({
       <View style={styles.tabs}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <NotebookPill active={activeNotebookId === ALL_NOTES_ID} label="全部笔记" memoCount={notebooksMemoCount} onPress={() => onSelectNotebook(ALL_NOTES_ID)} />
-          {notebooks.map((notebook) => (
+          {flattenNotebooks(notebooks).map(({ depth, notebook }) => (
             <NotebookPill
               active={activeNotebookId === notebook.id}
               key={notebook.id}
-              label={notebook.name}
+              label={`${"  ".repeat(depth)}${depth > 0 ? "└ " : ""}${notebook.name}`}
               memoCount={notebook.memoCount}
               onPress={() => onSelectNotebook(notebook.id)}
             />
@@ -1104,8 +1108,11 @@ const NotebookManagerModal = ({ notebooks, onClose, visible }: { notebooks: Note
   const { client } = useSession();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
+  const [parentId, setParentId] = useState<string | null>(null);
   const [editingNotebookId, setEditingNotebookId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingParentId, setEditingParentId] = useState<string | null>(null);
+  const notebookOptions = flattenNotebooks(notebooks);
 
   const invalidateNotebooks = async () => {
     await Promise.all([
@@ -1126,16 +1133,17 @@ const NotebookManagerModal = ({ notebooks, onClose, visible }: { notebooks: Note
         throw new Error("请输入笔记本名称");
       }
 
-      return client.createNotebook({ name: trimmed });
+      return client.createNotebook({ name: trimmed, parentId });
     },
     onSuccess: async () => {
       setName("");
+      setParentId(null);
       await invalidateNotebooks();
     },
   });
 
   const renameNotebookMutation = useMutation({
-    mutationFn: async ({ notebookId, nextName }: { notebookId: string; nextName: string }) => {
+    mutationFn: async ({ notebookId, nextName, nextParentId }: { notebookId: string; nextName: string; nextParentId: string | null }) => {
       if (!client) {
         throw new Error("Client is not ready");
       }
@@ -1146,11 +1154,12 @@ const NotebookManagerModal = ({ notebooks, onClose, visible }: { notebooks: Note
         throw new Error("请输入笔记本名称");
       }
 
-      return client.updateNotebook(notebookId, { name: trimmed });
+      return client.updateNotebook(notebookId, { name: trimmed, parentId: nextParentId });
     },
     onSuccess: async () => {
       setEditingNotebookId(null);
       setEditingName("");
+      setEditingParentId(null);
       await invalidateNotebooks();
     },
   });
@@ -1200,29 +1209,43 @@ const NotebookManagerModal = ({ notebooks, onClose, visible }: { notebooks: Note
               <Plus color="#ffffff" size={18} />
             </Pressable>
           </View>
+          <Text style={styles.label}>父级笔记本</Text>
+          <NotebookParentSelector
+            currentParentId={parentId}
+            options={notebookOptions}
+            onChange={setParentId}
+          />
           {createNotebookMutation.error ? (
             <Text style={styles.errorText}>{createNotebookMutation.error instanceof Error ? createNotebookMutation.error.message : "创建失败"}</Text>
           ) : null}
 
           <Text style={styles.label}>全部笔记本</Text>
-          {notebooks.map((notebook) => {
+          {notebookOptions.map(({ depth, notebook }) => {
             const editing = editingNotebookId === notebook.id;
+            const parentOptions = notebookOptions.filter((option) => option.notebook.id !== notebook.id && !isNotebookDescendant(notebooks, option.notebook.id, notebook.id));
 
             return (
-              <View key={notebook.id} style={styles.notebookManageRow}>
+              <View key={notebook.id} style={[styles.notebookManageRow, depth > 0 && { marginLeft: Math.min(depth * 14, 42) }]}>
                 {editing ? (
-                  <TextInput onChangeText={setEditingName} style={[styles.titleInput, styles.inlineInput]} value={editingName} />
+                  <View style={styles.notebookEditBox}>
+                    <TextInput onChangeText={setEditingName} style={styles.titleInput} value={editingName} />
+                    <NotebookParentSelector
+                      currentParentId={editingParentId}
+                      options={parentOptions}
+                      onChange={setEditingParentId}
+                    />
+                  </View>
                 ) : (
                   <View style={styles.notebookManageText}>
                     <Text numberOfLines={1} style={styles.panelValue}>
-                      {notebook.name}
+                      {depth > 0 ? `${"· ".repeat(depth)}${notebook.name}` : notebook.name}
                     </Text>
-                    <Text style={styles.panelLabel}>{notebook.memoCount} 条笔记</Text>
+                    <Text style={styles.panelLabel}>{notebook.memoCount} 条笔记{notebook.parentId ? " · 子级笔记本" : ""}</Text>
                   </View>
                 )}
 
                 {editing ? (
-                  <IconButton onPress={() => renameNotebookMutation.mutate({ notebookId: notebook.id, nextName: editingName })}>
+                  <IconButton onPress={() => renameNotebookMutation.mutate({ notebookId: notebook.id, nextName: editingName, nextParentId: editingParentId })}>
                     {renameNotebookMutation.isPending ? <ActivityIndicator color="#0f172a" /> : <Check color="#0f172a" size={18} />}
                   </IconButton>
                 ) : (
@@ -1230,6 +1253,7 @@ const NotebookManagerModal = ({ notebooks, onClose, visible }: { notebooks: Note
                     onPress={() => {
                       setEditingNotebookId(notebook.id);
                       setEditingName(notebook.name);
+                      setEditingParentId(notebook.parentId);
                     }}
                   >
                     <Pencil color="#0f172a" size={18} />
@@ -2614,6 +2638,28 @@ const SelectionAction = ({
   </Pressable>
 );
 
+const NotebookParentSelector = ({
+  currentParentId,
+  onChange,
+  options,
+}: {
+  currentParentId: string | null;
+  onChange: (parentId: string | null) => void;
+  options: NotebookOption[];
+}) => (
+  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.parentSelectList}>
+    <OptionPill active={currentParentId === null} label="顶层" onPress={() => onChange(null)} />
+    {options.map(({ depth, notebook }) => (
+      <OptionPill
+        active={currentParentId === notebook.id}
+        key={notebook.id}
+        label={`${"  ".repeat(depth)}${depth > 0 ? "└ " : ""}${notebook.name}`}
+        onPress={() => onChange(notebook.id)}
+      />
+    ))}
+  </ScrollView>
+);
+
 const NotebookPill = ({
   active,
   label,
@@ -2730,6 +2776,50 @@ const parseTags = (value: string) =>
         .filter(Boolean)
     )
   );
+
+const flattenNotebooks = (notebooks: Notebook[]) => {
+  const byParent = new Map<string | null, Notebook[]>();
+  const byId = new Set(notebooks.map((notebook) => notebook.id));
+  const result: NotebookOption[] = [];
+
+  for (const notebook of notebooks) {
+    const parentId = notebook.parentId && byId.has(notebook.parentId) ? notebook.parentId : null;
+    const siblings = byParent.get(parentId) ?? [];
+    siblings.push(notebook);
+    byParent.set(parentId, siblings);
+  }
+
+  for (const siblings of byParent.values()) {
+    siblings.sort(compareNotebooksForMobile);
+  }
+
+  const walk = (parentId: string | null, depth: number) => {
+    for (const notebook of byParent.get(parentId) ?? []) {
+      result.push({ notebook, depth });
+      walk(notebook.id, depth + 1);
+    }
+  };
+
+  walk(null, 0);
+  return result;
+};
+
+const compareNotebooksForMobile = (left: Notebook, right: Notebook) =>
+  left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, "zh-CN") || left.id.localeCompare(right.id);
+
+const isNotebookDescendant = (notebooks: Notebook[], candidateNotebookId: string, ancestorNotebookId: string) => {
+  let current = notebooks.find((notebook) => notebook.id === candidateNotebookId) ?? null;
+
+  while (current?.parentId) {
+    if (current.parentId === ancestorNotebookId) {
+      return true;
+    }
+
+    current = notebooks.find((notebook) => notebook.id === current?.parentId) ?? null;
+  }
+
+  return false;
+};
 
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("zh-CN", {
@@ -3364,6 +3454,14 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
     minWidth: 0,
+  },
+  notebookEditBox: {
+    flex: 1,
+    gap: 8,
+    minWidth: 0,
+  },
+  parentSelectList: {
+    flexGrow: 0,
   },
   tagManageRow: {
     alignItems: "center",
