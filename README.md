@@ -27,7 +27,7 @@ The public demo resets daily and restores sample notes. Do not store private con
 
 Copy this prompt into your AI coding assistant, such as Claude Code, Codex, Antigravity, Cursor, or Trae:
 
-> **Recommendation:** Before deployment, configure GitHub and Cloudflare MCP servers, plugins, or other supported integrations for your AI Agent. This allows it to fork the repository, create the required Cloudflare resources, and deploy the application.
+**Recommendation:** Before deployment, configure GitHub and Cloudflare MCP servers, plugins, or other supported integrations for your AI Agent. This allows it to fork the repository, create the required Cloudflare resources, and deploy the application.
 
 ```text
 Please fork the EdgeEver repository first: https://github.com/tianma-if/edgeever
