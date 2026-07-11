@@ -1,9 +1,10 @@
 import { MoonStar, SunMedium } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useTheme } from "./ThemeProvider";
 
-export const ThemeToggle = () => {
+export const ThemeToggle = ({ className }: { className?: string }) => {
   const { t } = useTranslation();
   const { resolvedTheme, setPreference } = useTheme();
   const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
@@ -11,7 +12,10 @@ export const ThemeToggle = () => {
 
   return (
     <Button
-      className="hidden h-8 w-8 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-slate-300 lg:inline-flex"
+      className={cn(
+        "hidden h-8 w-8 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-slate-300 lg:inline-flex",
+        className
+      )}
       size="icon"
       variant="ghost"
       title={label}
