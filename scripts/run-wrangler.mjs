@@ -35,7 +35,7 @@ const loadLocalEnv = () => {
       value = value.slice(1, -1);
     }
 
-    if (key && process.env[key] === undefined) {
+    if (key) {
       process.env[key] = value;
     }
   }
