@@ -51,6 +51,7 @@ import {
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { MemoCard } from "./MemoCard";
 import { cn } from "@/lib/utils";
+import { WORKSPACE_PAGE_TITLE_CLASSNAME } from "@/lib/workspace-ui";
 import type { Notebook, MemoSummary } from "@edgeever/shared";
 import type {
   MemoFilterMode,
@@ -998,7 +999,7 @@ export const MemoListPane = ({
                 aria-label={t("memoList.switchNotebook")}
                 onClick={onOpenNotebookPicker}
               >
-                <span className="max-w-[190px] truncate text-lg font-semibold text-slate-950">{listTitle}</span>
+                <span className={`max-w-[190px] truncate ${WORKSPACE_PAGE_TITLE_CLASSNAME}`}>{listTitle}</span>
                 <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
               </button>
             </div>
@@ -1035,7 +1036,7 @@ export const MemoListPane = ({
             </Button>
           )}
           <div className="min-w-0">
-            <div className="truncate text-lg font-semibold leading-6 text-slate-950">{listTitle}</div>
+            <div className={`truncate ${WORKSPACE_PAGE_TITLE_CLASSNAME}`}>{listTitle}</div>
             <div className="mt-0.5 truncate text-xs text-slate-500">
               {listContextLabel} · {listCountLabel}
             </div>

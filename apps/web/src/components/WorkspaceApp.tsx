@@ -104,7 +104,7 @@ const NotebookPane = lazy(() => import("./NotebookPane").then((module) => ({ def
 const EvernoteImportGuidePane = lazy(() =>
   import("./EvernoteImportGuidePane").then((module) => ({ default: module.EvernoteImportGuidePane }))
 );
-const TagsDialog = lazy(() => import("./dialogs/TagsDialog").then((module) => ({ default: module.TagsDialog })));
+const TagsPane = lazy(() => import("./TagsPane").then((module) => ({ default: module.TagsPane })));
 const TemplatesDialog = lazy(() => import("./dialogs/TemplatesDialog").then((module) => ({ default: module.TemplatesDialog })));
 
 const SETTINGS_PATH = "/settings";
@@ -757,10 +757,9 @@ export const WorkspaceApp = ({
   const [multiSelectKeyDown, setMultiSelectKeyDown] = useState(false);
   const [imageCompressionEnabled, setImageCompressionEnabled] = useState(readImageCompressionPreference);
   const [shortcutSettings, setShortcutSettings] = useState<ShortcutSettings>(readShortcutSettingsPreference);
-  const [rightView, setRightView] = useState<"editor" | "settings" | "assets" | "evernote-migration">(() =>
+  const [rightView, setRightView] = useState<"editor" | "settings" | "assets" | "tags" | "evernote-migration">(() =>
     isInitialSettingsRoute ? "settings" : "editor"
   );
-  const [tagsOpen, setTagsOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [mobileNotebookPickerOpen, setMobileNotebookPickerOpen] = useState(false);
   const [mobileBottomNavActive, setMobileBottomNavActive] = useState<MobileBottomNavItem>(() =>
@@ -903,7 +902,6 @@ export const WorkspaceApp = ({
       mobileSearchActive ||
       templatesOpen ||
       rightView !== "editor" ||
-      tagsOpen ||
       memoSelectionModeActive ||
       visibleActivePane === "editor" ||
       visibleActivePane === "notebooks"
@@ -920,7 +918,6 @@ export const WorkspaceApp = ({
       !mobileListActionsOpen &&
       !mobileMoveOpen &&
       !mobileMoreOpen &&
-      !tagsOpen &&
       !templatesOpen
   );
 
@@ -1931,7 +1928,10 @@ export const WorkspaceApp = ({
 
   const handleOpenTags = () => {
     clearHiddenMobileSearch();
-    setTagsOpen(true);
+    skipNextHomeRouteSyncRef.current = location.pathname !== "/";
+    navigateWorkspaceHome();
+    setRightView("tags");
+    setActivePane("editor");
   };
 
   const handleOpenTemplates = () => {
@@ -2037,8 +2037,8 @@ export const WorkspaceApp = ({
       return true;
     }
 
-    if (tagsOpen) {
-      setTagsOpen(false);
+    if (rightView === "tags") {
+      handleCloseAssets();
       return true;
     }
 
@@ -2083,7 +2083,6 @@ export const WorkspaceApp = ({
 	    mobileSearchActive,
     notebookDeleteConfirmation,
     notebookNameDialog,
-    tagsOpen,
     templatesOpen,
     updateNotebookMutation.isPending,
   ]);
@@ -2139,7 +2138,6 @@ export const WorkspaceApp = ({
           mobileNotebookPickerOpen ||
           notebookDeleteConfirmation ||
           notebookNameDialog ||
-          tagsOpen ||
           templatesOpen
       );
 
@@ -2206,7 +2204,6 @@ export const WorkspaceApp = ({
     notebookDeleteConfirmation,
     notebookNameDialog,
     selectedMemoId,
-    tagsOpen,
     templatesOpen,
   ]);
 
@@ -2285,6 +2282,8 @@ export const WorkspaceApp = ({
       ? t("workspace.loading.settings")
       : rightView === "assets"
         ? t("workspace.loading.assets")
+        : rightView === "tags"
+          ? t("workspace.loading.tags")
         : rightView === "evernote-migration"
           ? t("workspace.loading.migration")
           : t("workspace.loading.editor");
@@ -2521,6 +2520,8 @@ export const WorkspaceApp = ({
                   />
                 ) : rightView === "assets" ? (
                   <AssetsPane onClose={handleCloseAssets} activeMemo={selectedMemo} />
+                ) : rightView === "tags" ? (
+                  <TagsPane onClose={handleCloseAssets} />
                 ) : rightView === "evernote-migration" ? (
                   <EvernoteImportGuidePane onClose={() => setRightView("settings")} />
                 ) : (
@@ -2580,11 +2581,6 @@ export const WorkspaceApp = ({
         </main>
       </div>
 
-      {tagsOpen && (
-        <Suspense fallback={null}>
-          <TagsDialog onClose={() => setTagsOpen(false)} />
-        </Suspense>
-      )}
       {templatesOpen && (
         <Suspense fallback={null}>
           <TemplatesDialog
