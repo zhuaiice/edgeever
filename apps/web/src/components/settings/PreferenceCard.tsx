@@ -43,8 +43,8 @@ export const PreferenceCard = ({
           {t("settings.preferences")}
         </CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-3 p-4 pt-0">
-        <div className="flex min-h-14 flex-col items-start gap-3 rounded-lg border border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <CardContent className="divide-y divide-slate-100 p-0">
+        <div className="flex min-h-16 flex-col items-start gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-900">{t("settings.languageTitle")}</div>
             <div className="mt-0.5 text-xs leading-4 text-slate-500">{t("settings.languageDescription")}</div>
@@ -69,12 +69,12 @@ export const PreferenceCard = ({
           </div>
         </div>
 
-        <div className="flex min-h-14 flex-col items-start gap-3 rounded-lg border border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex min-h-16 flex-col items-start gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-900">{t("settings.imageCompressionTitle")}</div>
             <div className="mt-0.5 text-xs leading-4 text-slate-500">{t("settings.imageCompressionDescription")}</div>
           </div>
-          <div className="flex w-full shrink-0 justify-start sm:w-32">
+          <div className="flex w-full shrink-0 justify-start sm:w-44 sm:justify-end">
             <Switch
               checked={imageCompressionEnabled}
               onCheckedChange={onImageCompressionChange}

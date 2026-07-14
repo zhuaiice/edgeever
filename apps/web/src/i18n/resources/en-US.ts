@@ -165,8 +165,7 @@ export const enUS = {
   },
   dataExport: {
     title: "Export notes",
-    description: "Export all active notes in this workspace as a Markdown ZIP archive.",
-    markdownDetails: "Each note is saved as a separate Markdown file with tags, notebook, and timestamps in Front Matter. Images and attachments are stored in a matching .assets folder and referenced with relative paths. Notes in Trash are excluded.",
+    description: "Export active notes as a Markdown ZIP with Front Matter and .assets attachments; Trash is excluded.",
     exportButton: "Export Markdown ZIP",
     exportingButton: "Exporting",
     exporting: "Preparing notes and attachments…",

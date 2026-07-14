@@ -103,7 +103,7 @@ export const ShortcutSettingsItem = ({ shortcutSettings, onShortcutSettingsChang
 
   return (
     <>
-      <div className="flex min-h-14 flex-col items-start gap-3 rounded-lg border border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="flex min-h-16 flex-col items-start gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
             <Keyboard className="h-4 w-4 text-emerald-700" />

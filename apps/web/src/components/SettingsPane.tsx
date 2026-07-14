@@ -1,4 +1,5 @@
 import { ChevronLeft, User } from "lucide-react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { ShortcutSettings } from "@/lib/app-helpers";
@@ -24,6 +25,12 @@ interface SettingsPaneProps {
   authRequired: boolean;
   onShowGuide?: () => void;
 }
+
+const SettingsGroup = ({ children }: { children: ReactNode }) => (
+  <div className="min-w-0 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white [&>*]:rounded-none [&>*]:border-0 [&>*]:bg-transparent">
+    {children}
+  </div>
+);
 
 export const SettingsPane = ({
   onClose,
@@ -70,13 +77,17 @@ export const SettingsPane = ({
             shortcutSettings={shortcutSettings}
             onShortcutSettingsChange={onShortcutSettingsChange}
           />
-          <PasswordCard authRequired={authRequired} />
           <AdvancedPlayCard />
-          <DataExportCard />
-          <EvernoteImportGuideCard onShowGuide={onShowGuide} />
-          <McpConfigCard />
-          <SystemInfoCard />
-          <SessionCard authRequired={authRequired} isLoggingOut={isLoggingOut} onLogout={onLogout} />
+          <SettingsGroup>
+            <DataExportCard />
+            <EvernoteImportGuideCard onShowGuide={onShowGuide} />
+            <McpConfigCard />
+          </SettingsGroup>
+          <SettingsGroup>
+            <PasswordCard authRequired={authRequired} />
+            <SystemInfoCard />
+            <SessionCard authRequired={authRequired} isLoggingOut={isLoggingOut} onLogout={onLogout} />
+          </SettingsGroup>
         </div>
       </div>
     </div>

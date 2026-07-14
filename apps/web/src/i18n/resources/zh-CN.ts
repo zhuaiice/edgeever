@@ -165,8 +165,7 @@ export const zhCN = {
   },
   dataExport: {
     title: "导出笔记",
-    description: "将当前工作区中的全部有效笔记导出为 Markdown ZIP。",
-    markdownDetails: "每篇笔记会保存为独立的 Markdown 文件，标签、笔记本和时间信息写入 Front Matter；图片与附件保存在对应的 .assets 文件夹中，并使用相对路径引用。回收站中的笔记不会导出。",
+    description: "将当前工作区中的有效笔记导出为 Markdown ZIP，元数据写入 Front Matter，附件存入 .assets，不含回收站内容。",
     exportButton: "导出 Markdown ZIP",
     exportingButton: "正在导出",
     exporting: "正在整理笔记和附件…",

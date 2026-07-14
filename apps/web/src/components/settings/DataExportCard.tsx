@@ -43,11 +43,22 @@ export const DataExportCard = () => {
           <Download className="h-4 w-4 text-emerald-700" />
           {t("dataExport.title")}
         </CardTitle>
-        <CardDescription className="text-xs leading-4">{t("dataExport.description")}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 p-4 pt-0">
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-600">
-          {t("dataExport.markdownDetails")}
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+          <CardDescription className="min-w-0 text-xs leading-5 md:truncate">
+            {t("dataExport.description")}
+          </CardDescription>
+          <Button
+            size="sm"
+            type="button"
+            className="w-full whitespace-nowrap md:w-auto"
+            disabled={state === "exporting"}
+            onClick={() => void handleExport()}
+          >
+            <Download className="h-4 w-4" />
+            {state === "exporting" ? t("dataExport.exportingButton") : t("dataExport.exportButton")}
+          </Button>
         </div>
 
         {state === "exporting" ? (
@@ -79,18 +90,6 @@ export const DataExportCard = () => {
           </p>
         ) : null}
 
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            type="button"
-            className="w-full sm:w-auto"
-            disabled={state === "exporting"}
-            onClick={() => void handleExport()}
-          >
-            <Download className="h-4 w-4" />
-            {state === "exporting" ? t("dataExport.exportingButton") : t("dataExport.exportButton")}
-          </Button>
-        </div>
       </CardContent>
     </Card>
   );
