@@ -138,7 +138,6 @@ import { downloadMarkdownFile } from "@/lib/note-markdown-export";
 import { NOTE_HTML_FULL_STYLES } from "@/lib/note-html-export-assets";
 import { downloadNoteHtmlFile, getHtmlImageEmbedNoticeKind } from "@/lib/note-html-export";
 import { openNotePrintPreview, serializeNoteDocumentForPrint } from "@/lib/note-print";
-import { saveAndSyncEditor } from "@/lib/editor-shortcuts";
 import { isBrowserOffline } from "@/lib/network-status";
 import {
   EDITOR_LINK_OPEN_MODE_CHANGED_EVENT,
@@ -628,9 +627,6 @@ type EditorPaneProps = {
   onSaveAsTemplate: (memo: MemoDetail, name: string) => Promise<void>;
   searchFocusToken: number;
   replaceFocusToken: number;
-  saveAndSyncToken: number;
-  editorModeToggleToken: number;
-  onSyncRequested: () => Promise<void>;
   documentActionRequest?: MemoDocumentActionRequest | null;
   onDocumentActionConsumed?: (requestId: number) => void;
   selectionActionBar?: ReactNode;
@@ -698,9 +694,6 @@ const RichEditorPane = ({
   onSaveAsTemplate,
   searchFocusToken,
   replaceFocusToken,
-  saveAndSyncToken,
-  editorModeToggleToken,
-  onSyncRequested,
   documentActionRequest,
   onDocumentActionConsumed,
   selectionActionBar,
@@ -789,8 +782,6 @@ const RichEditorPane = ({
   const [mobileImeDebugEvents, setMobileImeDebugEvents] = useState<MobileImeDebugEntry[]>([]);
   const [wechatCopyState, setWechatCopyState] = useState<"idle" | "copying" | "copied" | "error">("idle");
   const [memoIdCopyNotice, setMemoIdCopyNotice] = useState<{ status: "copied" | "error"; id: string } | null>(null);
-  const handledSaveAndSyncTokenRef = useRef(saveAndSyncToken);
-  const handledEditorModeToggleTokenRef = useRef(editorModeToggleToken);
   const noteLinkModifier = useMemo(
     () => typeof navigator !== "undefined" && /mac|iphone|ipad|ipod/i.test(navigator.platform) ? "⌘" : "Ctrl",
     []
@@ -2759,71 +2750,7 @@ const RichEditorPane = ({
   // can starve a recovered draft indefinitely. These members are stable (or
   // primitive) and are safe effect dependencies.
   const mutateSave = saveMutation.mutate;
-  const mutateSaveAsync = saveMutation.mutateAsync;
   const saveMutationPending = saveMutation.isPending;
-
-  const editorShortcutBlocked = Boolean(
-    historyOpen ||
-      shareOpen ||
-      aiAssistantOpen ||
-      systemInfoOpen ||
-      mobileNotebookSheetOpen ||
-      noteLinkPickerOpen ||
-      externalLinkDialogOpen ||
-      resourceDialog ||
-      imagePreview
-  );
-
-  useEffect(() => {
-    if (handledEditorModeToggleTokenRef.current === editorModeToggleToken) {
-      return;
-    }
-
-    handledEditorModeToggleTokenRef.current = editorModeToggleToken;
-    if (editorShortcutBlocked || useMobilePlainTextEditor) {
-      return;
-    }
-
-    handleMarkdownModeChange();
-  }, [editorModeToggleToken, editorShortcutBlocked, handleMarkdownModeChange, useMobilePlainTextEditor]);
-
-  useEffect(() => {
-    if (handledSaveAndSyncTokenRef.current === saveAndSyncToken || saveMutationPending) {
-      return;
-    }
-
-    handledSaveAndSyncTokenRef.current = saveAndSyncToken;
-    if (
-      editorShortcutBlocked ||
-      effectiveReadOnly ||
-      !memoRef.current ||
-      !isEditorReady(editorRef.current) ||
-      saveState === "conflict"
-    ) {
-      return;
-    }
-
-    void (async () => {
-      try {
-        await saveAndSyncEditor({
-          hasUnsavedChanges: hasUnsavedChangesRef.current,
-          save: mutateSaveAsync,
-          sync: onSyncRequested,
-        });
-      } catch {
-        // The save mutation owns its visible error/conflict state. Do not sync
-        // after a failed save because the queue may not contain this snapshot.
-      }
-    })();
-  }, [
-    editorShortcutBlocked,
-    effectiveReadOnly,
-    mutateSaveAsync,
-    onSyncRequested,
-    saveAndSyncToken,
-    saveMutationPending,
-    saveState,
-  ]);
 
   const replaceAttachmentLabel = useCallback((target: AttachmentMenuTarget, filename: string) => {
     const activeEditor = editorRef.current;

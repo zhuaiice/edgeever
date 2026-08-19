@@ -688,14 +688,6 @@ export const enUS = {
         label: "Replace text",
         description: "Open replace in the current note.",
       },
-      saveAndSync: {
-        label: "Save and sync",
-        description: "Save the current note now and sync pending local changes.",
-      },
-      toggleEditorMode: {
-        label: "Switch editor mode",
-        description: "Switch between Markdown source and rich text editing.",
-      },
     },
   },
   options: {
@@ -1413,7 +1405,7 @@ export const enUS = {
     closeNotice: "Close update notice",
     sidebarInstall: "Download Desktop Client",
     sidebarInstallTitle: "Download the EdgeEver Desktop Client",
-    sidebarInstallAvailability: "Mac/iOS/Android available · Windows soon",
+    sidebarInstallAvailability: "Mac available · Windows coming soon",
     sidebarClipper: "Install Web Clipper",
     sidebarClipperTitle: "Install the EdgeEver Web Clipper",
     iosPrompt: {
