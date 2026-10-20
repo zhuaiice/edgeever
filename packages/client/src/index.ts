@@ -2,7 +2,6 @@ import {
   parsePreparedAiGeneration,
   streamDirectAiGeneration,
 } from "./ai-direct-stream";
-import { throwIfAborted } from "./abort-signal";
 
 import { createPluginCapabilities } from './plugin-capabilities';
 import type {
@@ -691,7 +690,7 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
     payload: unknown,
     streamOptions: { signal?: AbortSignal; onEvent: (event: CompanionEvent) => void },
   ) => {
-    throwIfAborted(streamOptions.signal);
+    streamOptions.signal?.throwIfAborted();
     const { context, response } = await send(preparePath, {
       method: "POST", body: JSON.stringify(payload), signal: streamOptions.signal,
     });
@@ -708,10 +707,10 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
     prepare: () => Promise<P | null>;
     run: (prepared: P) => Promise<T>;
   }): Promise<T> => {
-    throwIfAborted(args.signal);
+    args.signal?.throwIfAborted();
     const prepared = await args.prepare();
     if (prepared == null) throw directAiUnavailable();
-    throwIfAborted(args.signal);
+    args.signal?.throwIfAborted();
     return args.run(prepared);
   };
 
@@ -1078,7 +1077,7 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
     },
 
     streamAiGeneration: async (payload: AiGenerateInput, streamOptions: { signal?: AbortSignal; onEvent: (event: AiStreamEvent) => void }) => {
-      throwIfAborted(streamOptions.signal);
+      streamOptions.signal?.throwIfAborted();
       const { context, response } = await send("/api/v1/ai/generate/prepare", {
         method: "POST", body: JSON.stringify(payload), signal: streamOptions.signal,
       });
